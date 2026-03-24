@@ -239,11 +239,14 @@ namespace CircuitFlowAlchemy.Prototype.FactorioLite
             var sh = Screen.height * invScale;
             _hoverTooltip = string.Empty;
 
-            DrawBottomHud(sw, sh);
-
-            if (!string.IsNullOrEmpty(_hoverTooltip))
+            if (!_showCraftWindow)
             {
-                DrawTooltip(sw, sh, _hoverTooltip);
+                DrawBottomHud(sw, sh);
+
+                if (!string.IsNullOrEmpty(_hoverTooltip))
+                {
+                    DrawTooltip(sw, sh, _hoverTooltip);
+                }
             }
 
             if (_pauseAnim > 0.001f)
