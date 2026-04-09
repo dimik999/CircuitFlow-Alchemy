@@ -8,6 +8,12 @@ namespace CircuitFlowAlchemy.Prototype.FactorioLite
     public class PlayerController2D : MonoBehaviour
     {
         [SerializeField] private float moveSpeed = 5f;
+        private WorldGridSystem _world;
+
+        private void Start()
+        {
+            _world = FindFirstObjectByType<WorldGridSystem>();
+        }
 
         private void Update()
         {
@@ -17,7 +23,44 @@ namespace CircuitFlowAlchemy.Prototype.FactorioLite
             }
 
             var input = ReadMoveInput();
-            transform.position += (Vector3)(input * moveSpeed * Time.deltaTime);
+            if (input.sqrMagnitude <= 0.0001f)
+            {
+                return;
+            }
+
+            var pos = transform.position;
+            float step = moveSpeed * Time.deltaTime;
+
+            // Axis-separated movement keeps sliding smooth while blocking buildings.
+            var targetX = pos + new Vector3(input.x * step, 0f, 0f);
+            if (CanStandAt(targetX))
+            {
+                pos.x = targetX.x;
+            }
+
+            var targetY = pos + new Vector3(0f, input.y * step, 0f);
+            if (CanStandAt(targetY))
+            {
+                pos.y = targetY.y;
+            }
+
+            transform.position = pos;
+        }
+
+        private bool CanStandAt(Vector3 worldPos)
+        {
+            if (_world == null)
+            {
+                return true;
+            }
+
+            var cell = new Vector2Int(Mathf.RoundToInt(worldPos.x), Mathf.RoundToInt(worldPos.y));
+            if (!_world.IsInside(cell))
+            {
+                return false;
+            }
+
+            return !_world.HasBuilding(cell) && !_world.IsResourceNode(cell);
         }
 
         private static Vector2 ReadMoveInput()

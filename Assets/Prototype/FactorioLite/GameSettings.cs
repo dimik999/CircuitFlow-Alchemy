@@ -7,10 +7,12 @@ namespace CircuitFlowAlchemy.Prototype.FactorioLite
         private const string KeyMasterVolume = "CFA_SETTINGS_MASTER_VOLUME";
         private const string KeyUiScale = "CFA_SETTINGS_UI_SCALE";
         private const string KeyShowHints = "CFA_SETTINGS_SHOW_HINTS";
+        private const string KeyCameraZoomSpeed = "CFA_SETTINGS_CAMERA_ZOOM_SPEED";
 
         public static float MasterVolume { get; private set; } = 0.8f;
         public static float UiScale { get; private set; } = 1f;
         public static bool ShowHints { get; private set; } = true;
+        public static float CameraZoomSpeed { get; private set; } = 2f;
 
         static GameSettings()
         {
@@ -23,6 +25,7 @@ namespace CircuitFlowAlchemy.Prototype.FactorioLite
             MasterVolume = Mathf.Clamp01(PlayerPrefs.GetFloat(KeyMasterVolume, 0.8f));
             UiScale = Mathf.Clamp(PlayerPrefs.GetFloat(KeyUiScale, 1f), 0.8f, 1.4f);
             ShowHints = PlayerPrefs.GetInt(KeyShowHints, 1) == 1;
+            CameraZoomSpeed = Mathf.Clamp(PlayerPrefs.GetFloat(KeyCameraZoomSpeed, 2f), 0.5f, 6f);
         }
 
         public static void Save()
@@ -30,6 +33,7 @@ namespace CircuitFlowAlchemy.Prototype.FactorioLite
             PlayerPrefs.SetFloat(KeyMasterVolume, MasterVolume);
             PlayerPrefs.SetFloat(KeyUiScale, UiScale);
             PlayerPrefs.SetInt(KeyShowHints, ShowHints ? 1 : 0);
+            PlayerPrefs.SetFloat(KeyCameraZoomSpeed, CameraZoomSpeed);
             PlayerPrefs.Save();
         }
 
@@ -52,6 +56,11 @@ namespace CircuitFlowAlchemy.Prototype.FactorioLite
         public static void SetShowHints(bool value)
         {
             ShowHints = value;
+        }
+
+        public static void SetCameraZoomSpeed(float value)
+        {
+            CameraZoomSpeed = Mathf.Clamp(value, 0.5f, 6f);
         }
     }
 }

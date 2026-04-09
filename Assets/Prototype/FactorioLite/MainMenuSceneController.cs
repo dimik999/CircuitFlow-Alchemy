@@ -4,6 +4,8 @@ namespace CircuitFlowAlchemy.Prototype.FactorioLite
 {
     public class MainMenuSceneController : MonoBehaviour
     {
+        private const string SaveKeyWorld = "CFA_FACTORIO_LITE_WORLD_V1";
+        private const string SaveKeyName = "CFA_FACTORIO_LITE_SAVE_NAME_V1";
         private bool _showSettings;
         private string _lastHoveredId;
         private AudioSource _audioSource;
@@ -40,29 +42,29 @@ namespace CircuitFlowAlchemy.Prototype.FactorioLite
                 SceneFlow.OpenGameSceneNew();
             }
 
-            if (!_showSettings && StyledButton(new Rect(panel.x + 40, panel.y + 146, panel.width - 80, 38), "Загрузить слот 1", "menu_s1"))
+            if (!_showSettings && StyledButton(new Rect(panel.x + 40, panel.y + 146, panel.width - 80, 38), $"Загрузить: {GetSaveDisplayName(1)}", "menu_s1"))
             {
                 SceneFlow.OpenGameSceneLoad(1);
             }
 
-            if (!_showSettings && StyledButton(new Rect(panel.x + 40, panel.y + 190, panel.width - 80, 38), "Загрузить слот 2", "menu_s2"))
+            if (!_showSettings && StyledButton(new Rect(panel.x + 40, panel.y + 190, panel.width - 80, 38), $"Загрузить: {GetSaveDisplayName(2)}", "menu_s2"))
             {
                 SceneFlow.OpenGameSceneLoad(2);
             }
 
-            if (!_showSettings && StyledButton(new Rect(panel.x + 40, panel.y + 234, panel.width - 80, 38), "Загрузить слот 3", "menu_s3"))
+            if (!_showSettings && StyledButton(new Rect(panel.x + 40, panel.y + 234, panel.width - 80, 38), $"Загрузить: {GetSaveDisplayName(3)}", "menu_s3"))
             {
                 SceneFlow.OpenGameSceneLoad(3);
             }
 
-            if (StyledButton(new Rect(panel.x + 40, panel.y + 282, panel.width - 80, 38), "Настройки", "menu_settings"))
+            if (!_showSettings && StyledButton(new Rect(panel.x + 40, panel.y + 282, panel.width - 80, 38), "Настройки", "menu_settings"))
             {
                 _showSettings = !_showSettings;
             }
 
             if (!_showSettings && StyledButton(new Rect(panel.x + 40, panel.y + 326, panel.width - 80, 38), "Выход из игры", "menu_quit"))
             {
-                Application.Quit();
+                QuitGame();
             }
 
             if (_showSettings)
@@ -71,7 +73,7 @@ namespace CircuitFlowAlchemy.Prototype.FactorioLite
                 GUI.color = new Color(0f, 0f, 0f, 0.55f);
                 GUI.DrawTexture(new Rect(0, 0, sw, sh), Texture2D.whiteTexture);
                 GUI.color = prev;
-                DrawSettings(new Rect(panel.x + 20, panel.y + 326, panel.width - 40, 54));
+                DrawSettingsModal(sw, sh);
             }
         }
 
@@ -110,24 +112,61 @@ namespace CircuitFlowAlchemy.Prototype.FactorioLite
             return clip;
         }
 
-        private static void DrawSettings(Rect area)
+        private static void QuitGame()
         {
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+            Application.Quit();
+#endif
+        }
+
+        private void DrawSettingsModal(float sw, float sh)
+        {
+            const float w = 460f;
+            const float h = 176f;
+            var area = new Rect((sw - w) * 0.5f, (sh - h) * 0.5f, w, h);
             GUI.Box(area, GUIContent.none, UiTheme.Panel);
-            GUI.Label(new Rect(area.x + 10, area.y + 6, 160, 20), $"Громкость: {(int)(GameSettings.MasterVolume * 100)}%", UiTheme.Label);
-            float vol = GUI.HorizontalSlider(new Rect(area.x + 170, area.y + 10, area.width - 180, 18), GameSettings.MasterVolume, 0f, 1f);
+            GUI.Label(new Rect(area.x + 12, area.y + 10, area.width - 24, 24), "Настройки", UiTheme.Title);
+
+            GUI.Label(new Rect(area.x + 12, area.y + 46, 160, 20), $"Громкость: {(int)(GameSettings.MasterVolume * 100)}%", UiTheme.Label);
+            float vol = GUI.HorizontalSlider(new Rect(area.x + 170, area.y + 50, area.width - 182, 18), GameSettings.MasterVolume, 0f, 1f);
             if (Mathf.Abs(vol - GameSettings.MasterVolume) > 0.001f)
             {
                 GameSettings.SetMasterVolume(vol);
                 GameSettings.Save();
             }
 
-            GUI.Label(new Rect(area.x + 10, area.y + 30, 160, 20), $"Масштаб UI: {GameSettings.UiScale:0.00}", UiTheme.Label);
-            float scale = GUI.HorizontalSlider(new Rect(area.x + 170, area.y + 34, area.width - 180, 18), GameSettings.UiScale, 0.8f, 1.4f);
+            GUI.Label(new Rect(area.x + 12, area.y + 74, 160, 20), $"Масштаб UI: {GameSettings.UiScale:0.00}", UiTheme.Label);
+            float scale = GUI.HorizontalSlider(new Rect(area.x + 170, area.y + 78, area.width - 182, 18), GameSettings.UiScale, 0.8f, 1.4f);
             if (Mathf.Abs(scale - GameSettings.UiScale) > 0.001f)
             {
                 GameSettings.SetUiScale(scale);
                 GameSettings.Save();
             }
+
+            if (StyledButton(new Rect(area.x + area.width - 132, area.y + area.height - 38, 120, 28), "Закрыть", "menu_settings_close"))
+            {
+                _showSettings = false;
+            }
+        }
+
+        private static string KeyForSlot(string key, int slot) => $"{key}_SLOT_{slot}";
+
+        private static bool HasSave(int slot)
+        {
+            return PlayerPrefs.HasKey(KeyForSlot(SaveKeyWorld, slot));
+        }
+
+        private static string GetSaveDisplayName(int slot)
+        {
+            if (!HasSave(slot))
+            {
+                return $"Слот {slot} (пусто)";
+            }
+
+            var name = PlayerPrefs.GetString(KeyForSlot(SaveKeyName, slot), $"Слот {slot}");
+            return string.IsNullOrWhiteSpace(name) ? $"Слот {slot}" : name;
         }
     }
 }

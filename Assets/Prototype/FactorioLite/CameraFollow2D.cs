@@ -10,7 +10,6 @@ namespace CircuitFlowAlchemy.Prototype.FactorioLite
         [SerializeField] private float smooth = 8f;
         [SerializeField] private float minZoom = 6f;
         [SerializeField] private float maxZoom = 16f;
-        [SerializeField] private float zoomSpeed = 2f;
 
         private Transform _target;
         private Camera _cam;
@@ -36,7 +35,7 @@ namespace CircuitFlowAlchemy.Prototype.FactorioLite
             float wheel = ReadMouseWheel();
             if (_cam != null && Mathf.Abs(wheel) > 0.001f)
             {
-                _cam.orthographicSize = Mathf.Clamp(_cam.orthographicSize - wheel * zoomSpeed, minZoom, maxZoom);
+                _cam.orthographicSize = Mathf.Clamp(_cam.orthographicSize - wheel * GameSettings.CameraZoomSpeed, minZoom, maxZoom);
             }
         }
 

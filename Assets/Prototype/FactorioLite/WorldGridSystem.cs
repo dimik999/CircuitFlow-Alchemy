@@ -15,7 +15,9 @@ namespace CircuitFlowAlchemy.Prototype.FactorioLite
         Mixer,
         Generator,
         PowerPole,
-        MarketTerminal
+        MarketTerminal,
+        PipeConnector,
+        PipeSplitter
     }
 
     public class WorldGridSystem : MonoBehaviour
@@ -134,6 +136,30 @@ namespace CircuitFlowAlchemy.Prototype.FactorioLite
         }
 
         public bool IsResourceNode(Vector2Int cell) => _resourceNodes.ContainsKey(cell);
+        public bool IsCellBlocked(Vector2Int cell) => HasBuilding(cell) || IsResourceNode(cell);
+
+        public Vector2Int FindNearestFreeCell(Vector2Int start, int maxRadius = 24)
+        {
+            if (IsInside(start) && !IsCellBlocked(start))
+            {
+                return start;
+            }
+
+            for (int radius = 1; radius <= maxRadius; radius++)
+            {
+                for (int dx = -radius; dx <= radius; dx++)
+                {
+                    int dy = radius - Mathf.Abs(dx);
+                    var c1 = new Vector2Int(start.x + dx, start.y + dy);
+                    var c2 = new Vector2Int(start.x + dx, start.y - dy);
+
+                    if (IsInside(c1) && !IsCellBlocked(c1)) return c1;
+                    if (IsInside(c2) && !IsCellBlocked(c2)) return c2;
+                }
+            }
+
+            return Vector2Int.zero;
+        }
         public bool TryGatherByHand(Vector2Int cell, float amount)
         {
             if (!_resourceNodes.TryGetValue(cell, out var type))
@@ -204,23 +230,32 @@ namespace CircuitFlowAlchemy.Prototype.FactorioLite
 
             TryAddDirectionArrow(_buildings[cell]);
             UpdateRotation(_buildings[cell]);
+            RefreshPipeVisualsAround(cell);
 
             return true;
         }
 
         public bool TryRemove(Vector2Int cell)
         {
+            return TryRemove(cell, out _);
+        }
+
+        public bool TryRemove(Vector2Int cell, out BuildingType removedType)
+        {
+            removedType = BuildingType.None;
             if (!_buildings.TryGetValue(cell, out var data))
             {
                 return false;
             }
 
+            removedType = data.Type;
             if (data.View != null)
             {
                 Destroy(data.View);
             }
 
             _buildings.Remove(cell);
+            RefreshPipeVisualsAround(cell);
             return true;
         }
 
@@ -252,6 +287,23 @@ namespace CircuitFlowAlchemy.Prototype.FactorioLite
             int minY = -(Height / 2);
             int maxY = Height / 2;
 
+            // Use a tiny shared tileset to avoid creating thousands of unique textures.
+            var darkBase = new Color(0.16f, 0.22f, 0.30f);
+            var darkAccent = new Color(0.08f, 0.52f, 0.70f);
+            var lightBase = new Color(0.20f, 0.27f, 0.36f);
+            var lightAccent = new Color(0.14f, 0.62f, 0.82f);
+
+            var darkVariants = new[]
+            {
+                SpriteUtil.MakeGroundTileSprite(darkBase, darkAccent, 11, 17),
+                SpriteUtil.MakeGroundTileSprite(darkBase, darkAccent, 23, 31)
+            };
+            var lightVariants = new[]
+            {
+                SpriteUtil.MakeGroundTileSprite(lightBase, lightAccent, 7, 13),
+                SpriteUtil.MakeGroundTileSprite(lightBase, lightAccent, 19, 29)
+            };
+
             for (int x = minX; x <= maxX; x++)
             {
                 for (int y = minY; y <= maxY; y++)
@@ -260,11 +312,10 @@ namespace CircuitFlowAlchemy.Prototype.FactorioLite
                     tile.transform.position = new Vector3(x, y, 0f);
                     var sr = tile.AddComponent<SpriteRenderer>();
                     bool isDark = ((x + y) & 1) == 0;
-                    sr.sprite = SpriteUtil.MakeSolidSprite(isDark
-                        ? new Color(0.13f, 0.17f, 0.21f)
-                        : new Color(0.16f, 0.2f, 0.25f));
+                    int variant = ((x * 17 + y * 31) & 1);
+                    sr.sprite = isDark ? darkVariants[variant] : lightVariants[variant];
                     sr.sortingOrder = -10;
-                    tile.transform.localScale = new Vector3(0.98f, 0.98f, 1f);
+                    tile.transform.localScale = Vector3.one;
                     _tiles[new Vector2Int(x, y)] = tile;
                 }
             }
@@ -297,7 +348,7 @@ namespace CircuitFlowAlchemy.Prototype.FactorioLite
                     if (_tiles.TryGetValue(pos, out var tile))
                     {
                         var sr = tile.GetComponent<SpriteRenderer>();
-                        sr.color = GetNodeColor(type);
+                        sr.color = Color.Lerp(GetNodeColor(type), Color.white, 0.18f);
                     }
                 }
             }
@@ -370,7 +421,11 @@ namespace CircuitFlowAlchemy.Prototype.FactorioLite
                     continue;
                 }
 
-                if ((source.Type == BuildingType.Extractor || source.Type == BuildingType.Pipe || source.Type == BuildingType.Mixer)
+                if ((source.Type == BuildingType.Extractor
+                     || source.Type == BuildingType.Pipe
+                     || source.Type == BuildingType.Mixer
+                     || source.Type == BuildingType.PipeConnector
+                     || source.Type == BuildingType.PipeSplitter)
                     && source.BufferAmount > 0f)
                 {
                     TryTransferForward(cell, source);
@@ -438,7 +493,8 @@ namespace CircuitFlowAlchemy.Prototype.FactorioLite
 
         private bool IsBuildingPowered(Vector2Int pos, BuildingData building)
         {
-            if (building.Type == BuildingType.Pipe || building.Type == BuildingType.Storage)
+            if (building.Type == BuildingType.Pipe || building.Type == BuildingType.Storage
+                || building.Type == BuildingType.PipeConnector || building.Type == BuildingType.PipeSplitter)
             {
                 return true;
             }
@@ -541,13 +597,19 @@ namespace CircuitFlowAlchemy.Prototype.FactorioLite
 
         private void TryTransferForward(Vector2Int sourcePos, BuildingData source)
         {
+            if (source.Type == BuildingType.PipeSplitter)
+            {
+                TryTransferFromSplitter(sourcePos, source);
+                return;
+            }
+
             var targetPos = sourcePos + source.Direction;
             if (!_buildings.TryGetValue(targetPos, out var target))
             {
                 return;
             }
 
-            if (!CanAccept(target, source.Direction, source.BufferType))
+            if (!CanAccept(targetPos, target, source.Direction, source.BufferType))
             {
                 return;
             }
@@ -571,7 +633,63 @@ namespace CircuitFlowAlchemy.Prototype.FactorioLite
             target.BufferAmount += moved;
         }
 
-        private static bool CanAccept(BuildingData target, Vector2Int incomingDir, EssenceType incomingType)
+        private void TryTransferFromSplitter(Vector2Int sourcePos, BuildingData source)
+        {
+            var outDirs = new[]
+            {
+                source.Direction,
+                new Vector2Int(-source.Direction.y, source.Direction.x),
+                new Vector2Int(source.Direction.y, -source.Direction.x)
+            };
+
+            int available = 0;
+            for (int i = 0; i < outDirs.Length; i++)
+            {
+                var p = sourcePos + outDirs[i];
+                if (_buildings.TryGetValue(p, out var t) && CanAccept(p, t, outDirs[i], source.BufferType))
+                {
+                    available++;
+                }
+            }
+
+            if (available == 0)
+            {
+                return;
+            }
+
+            float totalMoved = Mathf.Min(1f, source.BufferAmount);
+            float part = totalMoved / available;
+            float moved = 0f;
+
+            for (int i = 0; i < outDirs.Length; i++)
+            {
+                var p = sourcePos + outDirs[i];
+                if (!_buildings.TryGetValue(p, out var t) || !CanAccept(p, t, outDirs[i], source.BufferType))
+                {
+                    continue;
+                }
+
+                if (t.Type == BuildingType.Storage)
+                {
+                    AddToInventory(source.BufferType.ToString(), part);
+                }
+                else if (t.Type == BuildingType.Mixer)
+                {
+                    t.MixInputs.Add(new EssenceChunk(source.BufferType, part));
+                }
+                else
+                {
+                    t.BufferType = source.BufferType;
+                    t.BufferAmount += part;
+                }
+
+                moved += part;
+            }
+
+            source.BufferAmount = Mathf.Max(0f, source.BufferAmount - moved);
+        }
+
+        private bool CanAccept(Vector2Int targetPos, BuildingData target, Vector2Int incomingDir, EssenceType incomingType)
         {
             if (target.Type == BuildingType.Storage)
             {
@@ -580,7 +698,19 @@ namespace CircuitFlowAlchemy.Prototype.FactorioLite
 
             if (target.Type == BuildingType.Pipe)
             {
-                // Pipe accepts only from its back side and sends forward.
+                int mask = BuildPipeConnectionMask(targetPos, target);
+                return (mask & DirToMaskBit(incomingDir)) != 0;
+            }
+
+            if (target.Type == BuildingType.PipeConnector)
+            {
+                // Connector merges any side except its output side.
+                return incomingDir != -target.Direction;
+            }
+
+            if (target.Type == BuildingType.PipeSplitter)
+            {
+                // Splitter accepts only from back side and emits to 3 directions.
                 return target.Direction == incomingDir;
             }
 
@@ -596,6 +726,14 @@ namespace CircuitFlowAlchemy.Prototype.FactorioLite
             }
 
             return false;
+        }
+
+        private static int DirToMaskBit(Vector2Int dir)
+        {
+            if (dir == Vector2Int.up) return 1;
+            if (dir == Vector2Int.right) return 2;
+            if (dir == Vector2Int.down) return 4;
+            return 8;
         }
 
         private static IEnumerable<Vector2Int> Neighbors(Vector2Int c)
@@ -636,6 +774,10 @@ namespace CircuitFlowAlchemy.Prototype.FactorioLite
                     return new Color(0.9f, 0.75f, 0.5f);
                 case BuildingType.MarketTerminal:
                     return new Color(0.2f, 0.95f, 0.95f);
+                case BuildingType.PipeConnector:
+                    return new Color(0.95f, 0.72f, 0.35f);
+                case BuildingType.PipeSplitter:
+                    return new Color(0.98f, 0.56f, 0.35f);
                 default:
                     return Color.white;
             }
@@ -678,6 +820,12 @@ namespace CircuitFlowAlchemy.Prototype.FactorioLite
                 return;
             }
 
+            if (data.Type == BuildingType.Pipe)
+            {
+                data.View.transform.rotation = Quaternion.identity;
+                return;
+            }
+
             float angle = 0f;
             if (data.Direction == Vector2Int.up) angle = 90f;
             if (data.Direction == Vector2Int.left) angle = 180f;
@@ -692,7 +840,7 @@ namespace CircuitFlowAlchemy.Prototype.FactorioLite
                 return;
             }
 
-            if (data.Type == BuildingType.Storage)
+            if (data.Type == BuildingType.Storage || data.Type == BuildingType.Pipe)
             {
                 return;
             }
@@ -790,9 +938,116 @@ namespace CircuitFlowAlchemy.Prototype.FactorioLite
                 }
             }
 
+            RefreshAllPipeVisuals();
+
             _extractRateMultiplier = Mathf.Clamp(save.ExtractRateMultiplier <= 0f ? 1f : save.ExtractRateMultiplier, 1f, 4f);
             _mixerOutputMultiplier = Mathf.Clamp(save.MixerOutputMultiplier <= 0f ? 1f : save.MixerOutputMultiplier, 1f, 3f);
             _powerReach = Mathf.Clamp(save.PowerReach <= 0 ? 4 : save.PowerReach, 4, 8);
+        }
+
+        private void RefreshAllPipeVisuals()
+        {
+            foreach (var pair in _buildings)
+            {
+                if (pair.Value.Type == BuildingType.Pipe)
+                {
+                    RefreshPipeVisualAt(pair.Key);
+                }
+            }
+        }
+
+        private void RefreshPipeVisualsAround(Vector2Int center)
+        {
+            RefreshPipeVisualAt(center);
+            foreach (var n in Neighbors(center))
+            {
+                RefreshPipeVisualAt(n);
+            }
+        }
+
+        private void RefreshPipeVisualAt(Vector2Int cell)
+        {
+            if (!_buildings.TryGetValue(cell, out var data) || data.Type != BuildingType.Pipe || data.View == null)
+            {
+                return;
+            }
+
+            int mask = BuildPipeConnectionMask(cell, data);
+
+            var sr = data.View.GetComponent<SpriteRenderer>();
+            if (sr != null)
+            {
+                sr.sprite = BuildingSpriteFactory.GetPipeWorldSprite(mask);
+            }
+        }
+
+        private int BuildPipeConnectionMask(Vector2Int cell, BuildingData data)
+        {
+            int raw = 0;
+            if (CanPipeConnect(cell + Vector2Int.up)) raw |= 1;
+            if (CanPipeConnect(cell + Vector2Int.right)) raw |= 2;
+            if (CanPipeConnect(cell + Vector2Int.down)) raw |= 4;
+            if (CanPipeConnect(cell + Vector2Int.left)) raw |= 8;
+
+            int count = ((raw & 1) != 0 ? 1 : 0)
+                        + ((raw & 2) != 0 ? 1 : 0)
+                        + ((raw & 4) != 0 ? 1 : 0)
+                        + ((raw & 8) != 0 ? 1 : 0);
+            if (count <= 2)
+            {
+                return raw;
+            }
+
+            // Limit plain pipe to max two links: keep heading + best secondary link.
+            int primary = DirToMaskBit(data.Direction);
+            int opposite = DirToMaskBit(-data.Direction);
+            if ((raw & primary) == 0)
+            {
+                if ((raw & opposite) != 0) primary = opposite;
+                else if ((raw & 1) != 0) primary = 1;
+                else if ((raw & 2) != 0) primary = 2;
+                else if ((raw & 4) != 0) primary = 4;
+                else primary = 8;
+            }
+
+            int pick = 0;
+            if ((raw & opposite) != 0 && opposite != primary)
+            {
+                pick = opposite;
+            }
+            else
+            {
+                int cw = 0;
+                int ccw = 0;
+                if (primary == 1) { cw = 2; ccw = 8; }
+                else if (primary == 2) { cw = 4; ccw = 1; }
+                else if (primary == 4) { cw = 8; ccw = 2; }
+                else { cw = 1; ccw = 4; }
+                if ((raw & cw) != 0) pick = cw;
+                else if ((raw & ccw) != 0) pick = ccw;
+                else if ((raw & 1) != 0 && primary != 1) pick = 1;
+                else if ((raw & 2) != 0 && primary != 2) pick = 2;
+                else if ((raw & 4) != 0 && primary != 4) pick = 4;
+                else if ((raw & 8) != 0 && primary != 8) pick = 8;
+            }
+
+            return primary | pick;
+        }
+
+        private bool CanPipeConnect(Vector2Int cell)
+        {
+            if (!_buildings.TryGetValue(cell, out var b))
+            {
+                return false;
+            }
+
+            return b.Type == BuildingType.Pipe
+                   || b.Type == BuildingType.Extractor
+                   || b.Type == BuildingType.Storage
+                   || b.Type == BuildingType.Mixer
+                   || b.Type == BuildingType.MarketTerminal
+                   || b.Type == BuildingType.PipeConnector
+                   || b.Type == BuildingType.PipeSplitter;
         }
 
         private sealed class BuildingData
@@ -850,6 +1105,7 @@ namespace CircuitFlowAlchemy.Prototype.FactorioLite
     public static class BuildingSpriteFactory
     {
         private static readonly Dictionary<BuildingType, Sprite> WorldSprites = new Dictionary<BuildingType, Sprite>();
+        private static readonly Dictionary<int, Sprite> PipeWorldSprites = new Dictionary<int, Sprite>();
         private static readonly Dictionary<BuildingType, Texture2D> IconTextures = new Dictionary<BuildingType, Texture2D>();
         private static Sprite _arrowSprite;
         private static bool _initialized;
@@ -868,15 +1124,36 @@ namespace CircuitFlowAlchemy.Prototype.FactorioLite
         public static Sprite GetWorldSprite(BuildingType type)
         {
             EnsureInitialized();
+            if (type == BuildingType.Pipe)
+            {
+                return GetPipeWorldSprite(0);
+            }
             if (WorldSprites.TryGetValue(type, out var sprite))
             {
                 return sprite;
             }
 
-            var tex = DrawIconTexture(type, 32);
-            sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), 32f);
+            int size = SpriteUtil.TilePixels;
+            var tex = DrawIconTexture(type, size);
+            sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), size);
             WorldSprites[type] = sprite;
             return sprite;
+        }
+
+        public static Sprite GetPipeWorldSprite(int mask)
+        {
+            EnsureInitialized();
+            mask &= 0x0F;
+            if (PipeWorldSprites.TryGetValue(mask, out var s))
+            {
+                return s;
+            }
+
+            int size = SpriteUtil.TilePixels;
+            var tex = DrawPipeTexture(size, mask);
+            s = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), size);
+            PipeWorldSprites[mask] = s;
+            return s;
         }
 
         public static Texture2D GetIconTexture(BuildingType type)
@@ -966,10 +1243,62 @@ namespace CircuitFlowAlchemy.Prototype.FactorioLite
                     DrawRect(tex, 4, 6, size - 8, size - 10, new Color(0.20f, 0.93f, 0.93f, 1f), false);
                     DrawRect(tex, 4, 3, size - 8, 3, new Color(0.10f, 0.62f, 0.62f, 1f), false);
                     break;
+                case BuildingType.PipeConnector:
+                {
+                    var core = new Color(0.28f, 0.32f, 0.40f, 1f);
+                    var inPort = new Color(0.20f, 0.72f, 0.96f, 1f);   // blue input
+                    var outPort = new Color(0.96f, 0.56f, 0.22f, 1f);  // orange outputs
+                    int c = size / 2;
+                    int w = Mathf.Max(3, size / 4);
+                    int half = w / 2;
+                    DrawRect(tex, c - half, c - half, w, w, core, false); // center
+                    DrawRect(tex, c - half, 2, w, c - half - 1, inPort, false); // input (top)
+                    DrawRect(tex, c + half + 1, c - half, size - c - half - 3, w, outPort, false); // out right
+                    DrawRect(tex, c - half, c + half + 1, w, size - c - half - 3, outPort, false); // out bottom
+                    DrawRect(tex, 2, c - half, c - half - 1, w, outPort, false); // out left
+                    break;
+                }
+                case BuildingType.PipeSplitter:
+                {
+                    var core = new Color(0.28f, 0.32f, 0.40f, 1f);
+                    var inPort = new Color(0.20f, 0.72f, 0.96f, 1f);   // blue input
+                    var outPort = new Color(0.96f, 0.56f, 0.22f, 1f);  // orange outputs
+                    int c = size / 2;
+                    int w = Mathf.Max(3, size / 4);
+                    int half = w / 2;
+                    DrawRect(tex, c - half, c - half, w, w, core, false); // center
+                    DrawRect(tex, c - half, 2, w, c - half - 1, inPort, false); // input (top)
+                    DrawRect(tex, c + half + 1, c - half, size - c - half - 3, w, outPort, false); // out right
+                    DrawRect(tex, c - half, c + half + 1, w, size - c - half - 3, outPort, false); // out bottom
+                    DrawRect(tex, 2, c - half, c - half - 1, w, outPort, false); // out left
+                    break;
+                }
                 default:
                     DrawRect(tex, 5, 5, size - 10, size - 10, Color.gray, false);
                     break;
             }
+
+            tex.Apply();
+            return tex;
+        }
+
+        private static Texture2D DrawPipeTexture(int size, int mask)
+        {
+            var bg = new Color(0.07f, 0.10f, 0.15f, 1f);
+            var pipe = new Color(0.80f, 0.86f, 0.92f, 1f);
+            var shadow = new Color(0.45f, 0.51f, 0.60f, 1f);
+            var tex = NewTexture(size, bg);
+            int c = size / 2;
+            int w = Mathf.Max(10, size / 8);
+            int half = w / 2;
+
+            DrawRect(tex, c - half, c - half, w, w, pipe, false);
+            DrawRect(tex, c - half + 1, c - half + 1, w - 2, w - 2, shadow, true);
+
+            if ((mask & 1) != 0) DrawRect(tex, c - half, c + half + 1, w, size - c - half - 3, pipe, false); // N
+            if ((mask & 2) != 0) DrawRect(tex, c + half + 1, c - half, size - c - half - 3, w, pipe, false); // E
+            if ((mask & 4) != 0) DrawRect(tex, c - half, 2, w, c - half - 1, pipe, false);       // S
+            if ((mask & 8) != 0) DrawRect(tex, 2, c - half, c - half - 1, w, pipe, false);       // W
 
             tex.Apply();
             return tex;
@@ -990,6 +1319,8 @@ namespace CircuitFlowAlchemy.Prototype.FactorioLite
                 WritePng(outDir, "icon_generator.png", DrawIconTexture(BuildingType.Generator, 64));
                 WritePng(outDir, "icon_powerpole.png", DrawIconTexture(BuildingType.PowerPole, 64));
                 WritePng(outDir, "icon_market.png", DrawIconTexture(BuildingType.MarketTerminal, 64));
+                WritePng(outDir, "icon_connector.png", DrawIconTexture(BuildingType.PipeConnector, 64));
+                WritePng(outDir, "icon_splitter.png", DrawIconTexture(BuildingType.PipeSplitter, 64));
             }
             catch (Exception e)
             {
