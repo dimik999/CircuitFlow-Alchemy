@@ -33,7 +33,7 @@ namespace CircuitFlowAlchemy.Prototype
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void AutoCreate()
         {
-            if (FindFirstObjectByType<FactorioLite.FactorioLiteBootstrap>() != null)
+            if (FindFirstObjectByType<FactoryAlchemy.FactoryAlchemyBootstrap>() != null)
             {
                 return;
             }

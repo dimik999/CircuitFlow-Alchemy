@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 #endif
 
-namespace CircuitFlowAlchemy.Prototype.FactorioLite
+namespace CircuitFlowAlchemy.Prototype.FactoryAlchemy
 {
     public class PlayerController2D : MonoBehaviour
     {

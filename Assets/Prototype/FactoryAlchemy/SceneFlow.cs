@@ -1,6 +1,6 @@
 using UnityEngine.SceneManagement;
 
-namespace CircuitFlowAlchemy.Prototype.FactorioLite
+namespace CircuitFlowAlchemy.Prototype.FactoryAlchemy
 {
     public static class SceneFlow
     {

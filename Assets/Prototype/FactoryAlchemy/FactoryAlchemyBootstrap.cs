@@ -1,21 +1,21 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace CircuitFlowAlchemy.Prototype.FactorioLite
+namespace CircuitFlowAlchemy.Prototype.FactoryAlchemy
 {
-    public class FactorioLiteBootstrap : MonoBehaviour
+    public class FactoryAlchemyBootstrap : MonoBehaviour
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void AutoCreate()
         {
-            if (FindFirstObjectByType<FactorioLiteBootstrap>() != null)
+            if (FindFirstObjectByType<FactoryAlchemyBootstrap>() != null)
             {
                 return;
             }
 
-            var root = new GameObject("FactorioLiteBootstrap");
+            var root = new GameObject("FactoryAlchemyBootstrap");
             DontDestroyOnLoad(root);
-            root.AddComponent<FactorioLiteBootstrap>();
+            root.AddComponent<FactoryAlchemyBootstrap>();
         }
 
         private void Awake()

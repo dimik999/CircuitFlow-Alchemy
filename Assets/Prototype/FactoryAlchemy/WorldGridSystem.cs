@@ -4,7 +4,7 @@ using System.IO;
 using CircuitFlowAlchemy.Core.Models;
 using UnityEngine;
 
-namespace CircuitFlowAlchemy.Prototype.FactorioLite
+namespace CircuitFlowAlchemy.Prototype.FactoryAlchemy
 {
     public enum BuildingType
     {
