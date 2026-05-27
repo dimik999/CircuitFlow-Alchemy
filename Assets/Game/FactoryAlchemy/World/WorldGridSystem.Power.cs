@@ -7,44 +7,60 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
 {
     public partial class WorldGridSystem : MonoBehaviour
     {
+        private static int ManhattanDistance(Vector2Int a, Vector2Int b)
+        {
+            return Mathf.Abs(a.x - b.x) + Mathf.Abs(a.y - b.y);
+        }
+
         private void RebuildPowerNetwork()
         {
             _poweredCells.Clear();
-            var queue = new Queue<Vector2Int>();
 
             foreach (var pair in _buildings)
             {
                 if (pair.Value.Type == BuildingType.Generator)
                 {
                     _poweredCells.Add(pair.Key);
-                    queue.Enqueue(pair.Key);
                 }
             }
 
-            while (queue.Count > 0)
+            // Spread through poles within PowerReach (Manhattan), not only to 4 neighbors.
+            bool expanded;
+            do
             {
-                var cell = queue.Dequeue();
-                foreach (var n in Neighbors(cell))
+                expanded = false;
+                var poweredSnapshot = new List<Vector2Int>(_poweredCells);
+                foreach (var source in poweredSnapshot)
                 {
-                    if (!_buildings.TryGetValue(n, out var b))
+                    if (!_buildings.TryGetValue(source, out var sourceData))
                     {
                         continue;
                     }
 
-                    if (b.Type != BuildingType.PowerPole || _poweredCells.Contains(n))
+                    if (sourceData.Type != BuildingType.Generator && sourceData.Type != BuildingType.PowerPole)
                     {
                         continue;
                     }
 
-                    if (Mathf.Abs(n.x - cell.x) + Mathf.Abs(n.y - cell.y) <= _powerReach)
+                    foreach (var pair in _buildings)
                     {
-                        _poweredCells.Add(n);
-                        queue.Enqueue(n);
+                        if (pair.Value.Type != BuildingType.PowerPole || _poweredCells.Contains(pair.Key))
+                        {
+                            continue;
+                        }
+
+                        int dist = ManhattanDistance(source, pair.Key);
+                        if (dist > 0 && dist <= _powerReach)
+                        {
+                            _poweredCells.Add(pair.Key);
+                            expanded = true;
+                        }
                     }
                 }
             }
+            while (expanded);
 
-            // Buildings are powered if adjacent to powered generator/pole.
+            // Production buildings are powered when within PowerReach of any powered generator/pole.
             foreach (var pair in _buildings)
             {
                 if (pair.Value.Type == BuildingType.Generator || pair.Value.Type == BuildingType.PowerPole)
@@ -52,9 +68,27 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
                     continue;
                 }
 
-                foreach (var n in Neighbors(pair.Key))
+                if (pair.Value.Type == BuildingType.Pipe || pair.Value.Type == BuildingType.PipeCorner
+                    || pair.Value.Type == BuildingType.Storage || pair.Value.Type == BuildingType.PipeConnector
+                    || pair.Value.Type == BuildingType.PipeSplitter)
                 {
-                    if (_poweredCells.Contains(n))
+                    continue;
+                }
+
+                foreach (var source in _poweredCells)
+                {
+                    if (!_buildings.TryGetValue(source, out var sourceData))
+                    {
+                        continue;
+                    }
+
+                    if (sourceData.Type != BuildingType.Generator && sourceData.Type != BuildingType.PowerPole)
+                    {
+                        continue;
+                    }
+
+                    int dist = ManhattanDistance(pair.Key, source);
+                    if (dist > 0 && dist <= _powerReach)
                     {
                         _poweredCells.Add(pair.Key);
                         break;

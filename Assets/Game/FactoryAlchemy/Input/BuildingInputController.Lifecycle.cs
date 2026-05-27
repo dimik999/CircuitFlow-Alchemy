@@ -12,7 +12,7 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
         private void Start()
         {
             _world = FindFirstObjectByType<WorldGridSystem>();
-            _hint = "1-Труба | 2-Экстрактор | 3-Хранилище | 4-Смеситель | R-поворот";
+            _hint = "1-8 хотбар | R-поворот | H-справочник | Tab-инвентарь | K-крафт";
             InitializeHotbarDefaults();
             _goals = new[]
             {
@@ -84,11 +84,43 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
 
             if (PressedEscape())
             {
-                _isPauseMenuOpen = !_isPauseMenuOpen;
-                _showPauseLoadSlots = false;
-                _showPauseSaveSlots = false;
-                if (_isPauseMenuOpen)
+                if (_showReferenceWindow)
                 {
+                    _showReferenceWindow = false;
+                }
+                else if (_showInventoryWindow)
+                {
+                    _showInventoryWindow = false;
+                }
+                else if (_showCraftWindow)
+                {
+                    _showCraftWindow = false;
+                }
+                else if (_showBuildingWindow)
+                {
+                    _showBuildingWindow = false;
+                }
+                else
+                {
+                    _isPauseMenuOpen = !_isPauseMenuOpen;
+                    _showPauseLoadSlots = false;
+                    _showPauseSaveSlots = false;
+                    if (_isPauseMenuOpen)
+                    {
+                        _showSettings = false;
+                    }
+                }
+            }
+
+            if (PressedToggleReference())
+            {
+                _showReferenceWindow = !_showReferenceWindow;
+                if (_showReferenceWindow)
+                {
+                    _showCraftWindow = false;
+                    _showInventoryWindow = false;
+                    _showBuildingWindow = false;
+                    _isPauseMenuOpen = false;
                     _showSettings = false;
                 }
             }
@@ -100,12 +132,13 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
                 {
                     _showCraftWindow = false;
                     _showBuildingWindow = false;
+                    _showReferenceWindow = false;
                     _isPauseMenuOpen = false;
                     _showSettings = false;
                 }
             }
 
-            if (PressedToggleCraftWindow() && !_showInventoryWindow)
+            if (PressedToggleCraftWindow() && !_showInventoryWindow && !_showReferenceWindow)
             {
                 _showCraftWindow = !_showCraftWindow;
                 if (_showCraftWindow)
@@ -114,7 +147,8 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
                 }
             }
 
-            if (_isPauseMenuOpen || _showSettings || _showCraftWindow || _showInventoryWindow || _showBuildingWindow)
+            if (_isPauseMenuOpen || _showSettings || _showCraftWindow || _showInventoryWindow
+                || _showReferenceWindow || _showBuildingWindow)
             {
                 if (_preview != null) _preview.SetActive(false);
                 return;

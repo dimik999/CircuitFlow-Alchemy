@@ -46,6 +46,7 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
         private const string SaveKeyPlayerY = "CFA_FACTORIO_LITE_PLAYER_Y_V1";
         private const string SaveKeyActOneFinale = "CFA_ACT1_FINALE_V1";
         private const int HotbarSize = 8;
+        private const int SaveSlotCount = 3;
 
         private WorldGridSystem _world;
         private UiScreen _screen = UiScreen.InGame;
@@ -87,6 +88,8 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
         private string _lastHoveredControlId;
         private bool _showCraftWindow;
         private bool _showInventoryWindow;
+        private bool _showReferenceWindow;
+        private ReferenceTab _referenceTab = ReferenceTab.Essences;
         private bool _showBuildingWindow;
         private Vector2Int _openedBuildingCell;
         private BuildingType _openedBuildingType = BuildingType.None;

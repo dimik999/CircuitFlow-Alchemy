@@ -73,6 +73,7 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
         public void ApplyPowerReachUpgrade(int delta)
         {
             _powerReach = Mathf.Clamp(_powerReach + delta, 4, 8);
+            RebuildPowerNetwork();
         }
 
         public void ResetRuntimeState()
@@ -110,8 +111,8 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
         {
             _mapSeed = UnityEngine.Random.Range(1, int.MaxValue);
             var rng = new System.Random(_mapSeed);
-            _width = rng.Next(96, 161);   // Large world width
-            _height = rng.Next(64, 121);  // Large world height
+            _width = rng.Next(96, 161);
+            _height = rng.Next(64, 121);
 
             GenerateGround();
             GenerateResourceNodes(rng);
@@ -426,7 +427,14 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
             var sr = go.AddComponent<SpriteRenderer>();
             sr.sprite = BuildingSpriteFactory.GetWorldSprite(type);
             sr.color = Color.white;
-            go.transform.localScale = Vector3.one;
+            if (type == BuildingType.Mixer)
+            {
+                // Draw under adjacent pipes so line ends are not covered by the mixer body.
+                sr.sortingOrder = -4;
+            }
+
+            float visualScale = BuildingSpriteFactory.GetWorldVisualScale(type);
+            go.transform.localScale = new Vector3(visualScale, visualScale, 1f);
 
             _buildings[cell] = new BuildingData
             {
@@ -441,11 +449,24 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
                 _storageInventories[cell] = new Dictionary<string, float>();
             }
 
-            TryAddDirectionArrow(_buildings[cell]);
             TryAddTransportFlowOverlay(_buildings[cell]);
             UpdateTransportFlowVisual(_buildings[cell]);
             UpdateRotation(_buildings[cell]);
+            _buildings[cell].View.transform.localScale = Vector3.one;
+            _buildings[cell].View.transform.position = CellToWorld(cell, -0.2f);
+            if (type == BuildingType.Pipe)
+            {
+                ApplyTransportVisualPosition(cell, _buildings[cell]);
+            }
+
             RefreshPipeVisualsAround(cell);
+
+            if (type == BuildingType.Generator || type == BuildingType.PowerPole
+                || type == BuildingType.Extractor || type == BuildingType.Mixer
+                || type == BuildingType.MarketTerminal)
+            {
+                RebuildPowerNetwork();
+            }
 
             return true;
         }
@@ -472,6 +493,14 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
             _buildings.Remove(cell);
             _storageInventories.Remove(cell);
             RefreshPipeVisualsAround(cell);
+
+            if (removedType == BuildingType.Generator || removedType == BuildingType.PowerPole
+                || removedType == BuildingType.Extractor || removedType == BuildingType.Mixer
+                || removedType == BuildingType.MarketTerminal)
+            {
+                RebuildPowerNetwork();
+            }
+
             return true;
         }
 

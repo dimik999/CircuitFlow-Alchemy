@@ -53,6 +53,8 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
 
             _preview.transform.rotation = Quaternion.Euler(0f, 0f, DirToAngle(previewDir));
             _previewRenderer.sprite = BuildingSpriteFactory.GetWorldSprite(_selected);
+            float previewScale = BuildingSpriteFactory.GetWorldVisualScale(_selected);
+            _preview.transform.localScale = new Vector3(previewScale, previewScale, 1f);
             _previewRenderer.color = canPlace
                 ? new Color(0.3f, 1f, 0.4f, 0.35f)
                 : new Color(1f, 0.25f, 0.25f, 0.35f);
@@ -389,51 +391,7 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
 
         private List<(string resource, float amount)> GetBuildCost(BuildingType type)
         {
-            var list = new List<(string resource, float amount)>();
-            switch (type)
-            {
-                case BuildingType.Pipe:
-                    list.Add(("Terra", 1f));
-                    break;
-                case BuildingType.PipeCorner:
-                    list.Add(("Terra", 1f));
-                    list.Add(("Aqua", 1f));
-                    break;
-                case BuildingType.PipeConnector:
-                    list.Add(("Terra", 2f));
-                    list.Add(("Ignis", 1f));
-                    break;
-                case BuildingType.PipeSplitter:
-                    list.Add(("Terra", 2f));
-                    list.Add(("Aqua", 1f));
-                    break;
-                case BuildingType.Extractor:
-                    list.Add(("Terra", 3f));
-                    list.Add(("Ignis", 1f));
-                    break;
-                case BuildingType.Storage:
-                    list.Add(("Terra", 2f));
-                    list.Add(("Aqua", 1f));
-                    break;
-                case BuildingType.Mixer:
-                    list.Add(("Terra", 3f));
-                    list.Add(("Aqua", 2f));
-                    list.Add(("Ignis", 1f));
-                    break;
-                case BuildingType.Generator:
-                    list.Add(("Terra", 4f));
-                    list.Add(("Ignis", 2f));
-                    break;
-                case BuildingType.PowerPole:
-                    list.Add(("Terra", 2f));
-                    break;
-                case BuildingType.MarketTerminal:
-                    list.Add(("Terra", 4f));
-                    list.Add(("Aqua", 2f));
-                    list.Add(("Ignis", 2f));
-                    break;
-            }
-            return list;
+            return GameReferenceCatalog.GetBuildCosts(type);
         }
 
         private float GetInventory(string key)
@@ -505,7 +463,7 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
 
         private void SaveGame()
         {
-            SaveGame(_activeSlot, GetSaveDisplayName(_activeSlot));
+            SaveGame(_activeSlot, GetSaveNameForSlot(_activeSlot));
         }
 
         private void LoadGame()
@@ -515,7 +473,7 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
 
         private void SaveGame(int slot)
         {
-            SaveGame(slot, GetSaveDisplayName(slot));
+            SaveGame(slot, GetSaveNameForSlot(slot));
         }
 
         private void SaveGame(int slot, string saveName)
@@ -524,6 +482,10 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
             {
                 return;
             }
+
+            string requestedName = NormalizeSaveNameInput(saveName, slot);
+            string normalizedName = MakeUniqueSaveName(requestedName, slot);
+            bool renamedForDuplicate = !string.Equals(requestedName, normalizedName, StringComparison.Ordinal);
 
             PlayerPrefs.SetString(KeyForSlot(SaveKeyWorld, slot), _world.SaveToJson());
             PlayerPrefs.SetInt(KeyForSlot(SaveKeyGoal, slot), _currentGoalIndex);
@@ -542,12 +504,13 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
                 PlayerPrefs.SetFloat(KeyForSlot(SaveKeyPlayerX, slot), player.transform.position.x);
                 PlayerPrefs.SetFloat(KeyForSlot(SaveKeyPlayerY, slot), player.transform.position.y);
             }
-            string normalizedName = string.IsNullOrWhiteSpace(saveName) ? $"Слот {slot}" : saveName.Trim();
             PlayerPrefs.SetString(KeyForSlot(SaveKeyName, slot), normalizedName);
             PlayerPrefs.Save();
             _activeSlot = slot;
             _showPauseSaveSlots = false;
-            _hint = $"Сохранено в слот {slot}";
+            _hint = renamedForDuplicate
+                ? $"Сохранено в слот {slot}. Название «{normalizedName}» (такое имя уже в другом слоте)"
+                : $"Сохранено в слот {slot}";
         }
 
         private void LoadGame(int slot)
@@ -588,9 +551,11 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
                 player.transform.position = new Vector3(px, py, player.transform.position.z);
             }
             _showInventoryWindow = false;
+            _showReferenceWindow = false;
             _showBuildingWindow = false;
             _draggingHotbarType = null;
             _inventoryScroll = 0f;
+            _referenceScrollPos = Vector2.zero;
             _storageWindowScroll = Vector2.zero;
             _showPauseSaveSlots = false;
             _selected = BuildingType.None;
@@ -613,8 +578,72 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
                 return $"Слот {slot} (пусто)";
             }
 
+            return GetStoredSaveName(slot);
+        }
+
+        private string GetSaveNameForSlot(int slot)
+        {
+            return HasSave(slot) ? GetStoredSaveName(slot) : $"Слот {slot}";
+        }
+
+        private string GetStoredSaveName(int slot)
+        {
             string saved = PlayerPrefs.GetString(KeyForSlot(SaveKeyName, slot), $"Слот {slot}");
-            return string.IsNullOrWhiteSpace(saved) ? $"Слот {slot}" : saved;
+            return string.IsNullOrWhiteSpace(saved) ? $"Слот {slot}" : saved.Trim();
+        }
+
+        private static string NormalizeSaveNameInput(string saveName, int slot)
+        {
+            if (string.IsNullOrWhiteSpace(saveName))
+            {
+                return $"Слот {slot}";
+            }
+
+            string trimmed = saveName.Trim();
+            if (trimmed.EndsWith(" (пусто)", StringComparison.Ordinal))
+            {
+                return $"Слот {slot}";
+            }
+
+            return trimmed;
+        }
+
+        private bool IsSaveNameUsedByOtherSlot(string name, int excludeSlot)
+        {
+            for (int s = 1; s <= SaveSlotCount; s++)
+            {
+                if (s == excludeSlot || !HasSave(s))
+                {
+                    continue;
+                }
+
+                if (string.Equals(GetStoredSaveName(s), name, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private string MakeUniqueSaveName(string saveName, int targetSlot)
+        {
+            string normalized = NormalizeSaveNameInput(saveName, targetSlot);
+            if (!IsSaveNameUsedByOtherSlot(normalized, targetSlot))
+            {
+                return normalized;
+            }
+
+            for (int i = 2; i < 1000; i++)
+            {
+                string candidate = $"{normalized} ({i})";
+                if (!IsSaveNameUsedByOtherSlot(candidate, targetSlot))
+                {
+                    return candidate;
+                }
+            }
+
+            return $"{normalized} ({targetSlot})";
         }
 
         private string GetSlotShortLabel(int slot)
@@ -780,10 +809,12 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
             _isCraftQueuePaused = false;
             _selectedCraftQueueIndex = -1;
             _showInventoryWindow = false;
+            _showReferenceWindow = false;
             _showCraftWindow = false;
             _showBuildingWindow = false;
             _draggingHotbarType = null;
             _inventoryScroll = 0f;
+            _referenceScrollPos = Vector2.zero;
             _storageWindowScroll = Vector2.zero;
             InitializeHotbarDefaults();
             _selected = BuildingType.None;
@@ -1122,7 +1153,7 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
 
             if (_showCraftWindow)
             {
-                var craftPanel = new Rect((sw - 560f) * 0.5f, (sh - 390f) * 0.5f, 560f, 390f);
+                var craftPanel = new Rect((sw - 560f) * 0.5f, (sh - 560f) * 0.5f, 560f, 560f);
                 return craftPanel.Contains(mp);
             }
 
@@ -1130,6 +1161,12 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
             {
                 var inventoryPanel = new Rect((sw - 520f) * 0.5f, (sh - 360f) * 0.5f, 520f, 360f);
                 return inventoryPanel.Contains(mp);
+            }
+
+            if (_showReferenceWindow)
+            {
+                var referencePanel = new Rect((sw - 620f) * 0.5f, (sh - 500f) * 0.5f, 620f, 500f);
+                return referencePanel.Contains(mp);
             }
 
             if (_isPauseMenuOpen)
@@ -1306,6 +1343,17 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
             return Keyboard.current != null && Keyboard.current.kKey.wasPressedThisFrame;
 #elif ENABLE_LEGACY_INPUT_MANAGER
             return Input.GetKeyDown(KeyCode.K);
+#else
+            return false;
+#endif
+        }
+
+        private static bool PressedToggleReference()
+        {
+#if ENABLE_INPUT_SYSTEM
+            return Keyboard.current != null && Keyboard.current.hKey.wasPressedThisFrame;
+#elif ENABLE_LEGACY_INPUT_MANAGER
+            return Input.GetKeyDown(KeyCode.H);
 #else
             return false;
 #endif

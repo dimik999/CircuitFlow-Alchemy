@@ -125,7 +125,6 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
             }
             else
             {
-                // Backward compatibility for old saves without explicit resource map.
                 if (_mapSeed <= 0)
                 {
                     _mapSeed = ComputeDeterministicSeedFromText(json);
@@ -177,6 +176,8 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
                 }
             }
 
+            RemoveLegacyDirectionArrowMarkers();
+            RebuildAllBuildingVisuals();
             AutoOrientPipesAfterLoad();
             RefreshAllPipeVisuals();
             UpdateTransportFlowVisuals();
@@ -184,6 +185,35 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
             _extractRateMultiplier = Mathf.Clamp(save.ExtractRateMultiplier <= 0f ? 1f : save.ExtractRateMultiplier, 1f, 4f);
             _mixerOutputMultiplier = Mathf.Clamp(save.MixerOutputMultiplier <= 0f ? 1f : save.MixerOutputMultiplier, 1f, 3f);
             _powerReach = Mathf.Clamp(save.PowerReach <= 0 ? 4 : save.PowerReach, 4, 8);
+            RebuildPowerNetwork();
+        }
+
+        public void RebuildAllBuildingVisuals()
+        {
+            BuildingSpriteFactory.InvalidateCaches();
+            var cells = new List<Vector2Int>(_buildings.Keys);
+            for (int i = 0; i < cells.Count; i++)
+            {
+                Vector2Int cell = cells[i];
+                if (!_buildings.TryGetValue(cell, out var data) || data.View == null)
+                {
+                    continue;
+                }
+
+                var sr = data.View.GetComponent<SpriteRenderer>();
+                if (sr != null)
+                {
+                    sr.sprite = BuildingSpriteFactory.GetWorldSprite(data.Type);
+                }
+
+                data.View.transform.localScale = Vector3.one;
+                data.View.transform.position = CellToWorld(cell, -0.2f);
+                UpdateRotation(data);
+                if (data.Type == BuildingType.Pipe)
+                {
+                    ApplyTransportVisualPosition(cell, data);
+                }
+            }
         }
     }
 }

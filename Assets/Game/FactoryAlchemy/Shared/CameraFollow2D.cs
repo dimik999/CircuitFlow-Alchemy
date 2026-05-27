@@ -32,6 +32,11 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
                 transform.position = Vector3.Lerp(transform.position, desired, Time.deltaTime * smooth);
             }
 
+            if (!GameUiState.IsGameplayActive)
+            {
+                return;
+            }
+
             float wheel = ReadMouseWheel();
             if (_cam != null && Mathf.Abs(wheel) > 0.001f)
             {

@@ -22,7 +22,7 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
             var sh = Screen.height * invScale;
             _hoverTooltip = string.Empty;
 
-            if (!_showCraftWindow)
+            if (!_showCraftWindow && !_showReferenceWindow)
             {
                 DrawBottomHud(sw, sh);
 
@@ -52,6 +52,11 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
                 DrawInventoryModal(sw, sh);
             }
 
+            if (_showReferenceWindow)
+            {
+                DrawReferenceWindow(sw, sh);
+            }
+
             if (_showBuildingWindow)
             {
                 DrawBuildingWindow(sw, sh);
@@ -65,7 +70,8 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
 
         private void ApplyUiModeState()
         {
-            bool gameplay = _screen == UiScreen.InGame && !_isPauseMenuOpen && !_showSettings && !_showInventoryWindow;
+            bool gameplay = _screen == UiScreen.InGame && !_isPauseMenuOpen && !_showSettings
+                && !_showInventoryWindow && !_showReferenceWindow && !_showCraftWindow;
             GameUiState.IsGameplayActive = gameplay;
             _world.SetWorldVisible(true);
 
@@ -113,9 +119,24 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
             }
             FinalizeHotbarDragIfReleased();
 
+            if (StyledButton(new Rect(hud.x + hud.width - 262, hud.y + 112, 120, 34), "Справ. (H)", "open_reference_window", UiTheme.Button))
+            {
+                _showReferenceWindow = !_showReferenceWindow;
+                if (_showReferenceWindow)
+                {
+                    _showCraftWindow = false;
+                    _showInventoryWindow = false;
+                    _showBuildingWindow = false;
+                }
+            }
+
             if (StyledButton(new Rect(hud.x + hud.width - 132, hud.y + 112, 120, 34), "Craft (K)", "open_craft_window", UiTheme.Button))
             {
                 _showCraftWindow = !_showCraftWindow;
+                if (_showCraftWindow)
+                {
+                    _showReferenceWindow = false;
+                }
             }
             DrawHudCraftQueueControls(hud);
             if (GameSettings.ShowHints)
@@ -215,21 +236,23 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
 
         private void DrawHudCraftQueueControls(Rect hud)
         {
-            var panel = new Rect(hud.x + hud.width - 316, hud.y + 8, 304, 40);
+            const float panelH = 50f;
+            var panel = new Rect(hud.x + hud.width - 328, hud.y + 6, 316, panelH);
             GUI.Box(panel, GUIContent.none, UiTheme.Panel);
-            GUI.Label(new Rect(panel.x + 8, panel.y + 2, 176, 16), "Очередь крафта", UiTheme.Label);
+            GUI.Label(new Rect(panel.x + 8, panel.y + 6, 120, 20), "Очередь крафта", UiTheme.Label);
 
             ClampSelectedCraftQueueIndex();
             int maxShown = Mathf.Min(6, _craftQueue.Count);
+            float iconY = panel.y + 26f;
             for (int i = 0; i < maxShown; i++)
             {
                 float x = panel.x + 8 + i * 22;
-                var iconRect = new Rect(x, panel.y + 20, 18, 18);
+                var iconRect = new Rect(x, iconY, 18, 18);
                 if (_selectedCraftQueueIndex == i)
                 {
                     var prev = GUI.color;
                     GUI.color = new Color(0.25f, 0.75f, 1f, 0.85f);
-                    GUI.DrawTexture(new Rect(x - 1, panel.y + 19, 20, 20), Texture2D.whiteTexture);
+                    GUI.DrawTexture(new Rect(x - 1, iconY - 1, 20, 20), Texture2D.whiteTexture);
                     GUI.color = prev;
                 }
                 GUI.DrawTexture(iconRect, GetBuildIcon(_craftQueue[i]));
@@ -242,14 +265,16 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
 
             if (_craftQueue.Count > maxShown)
             {
-                GUI.Label(new Rect(panel.x + 8 + maxShown * 22, panel.y + 20, 30, 18), $"+{_craftQueue.Count - maxShown}", UiTheme.Label);
+                GUI.Label(new Rect(panel.x + 8 + maxShown * 22, iconY, 36, 20), $"+{_craftQueue.Count - maxShown}", UiTheme.Label);
             }
 
             bool canReorder = _selectedCraftQueueIndex >= 0 && _selectedCraftQueueIndex < _craftQueue.Count && _craftQueue.Count > 1;
+            float btnY = panel.y + 22f;
+            const float btnH = 26f;
             GUI.enabled = canReorder;
-            if (StyledButton(new Rect(panel.x + 186, panel.y + 16, 28, 20), "↑", "hud_q_up", UiTheme.Button)) MoveSelectedCraftQueueItem(-1);
-            if (StyledButton(new Rect(panel.x + 218, panel.y + 16, 28, 20), "↓", "hud_q_down", UiTheme.Button)) MoveSelectedCraftQueueItem(1);
-            if (StyledButton(new Rect(panel.x + 250, panel.y + 16, 48, 20), "Top", "hud_q_top", UiTheme.Button)) MoveSelectedCraftQueueToFront();
+            if (StyledButton(new Rect(panel.x + 178, btnY, 30, btnH), "↑", "hud_q_up", UiTheme.Button)) MoveSelectedCraftQueueItem(-1);
+            if (StyledButton(new Rect(panel.x + 212, btnY, 30, btnH), "↓", "hud_q_down", UiTheme.Button)) MoveSelectedCraftQueueItem(1);
+            if (StyledButton(new Rect(panel.x + 246, btnY, 62, btnH), "В нач.", "hud_q_top", UiTheme.Button)) MoveSelectedCraftQueueToFront();
             GUI.enabled = true;
         }
 
@@ -362,6 +387,11 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
 
         private void DrawMixerContents(Rect panel, Vector2Int mixerCell)
         {
+            if (StyledButton(new Rect(panel.x + panel.width - 196, panel.y + 40, 182, 24), "Все рецепты (H)", "mixer_open_reference", UiTheme.TabButton))
+            {
+                OpenReferenceWindow(ReferenceTab.Mixer);
+            }
+
             GUI.Label(new Rect(panel.x + 14, panel.y + 44, panel.width - 28, 22), "Входные ресурсы -> Выход", UiTheme.Label);
             var leftRect = new Rect(panel.x + 14, panel.y + 70, (panel.width - 52) * 0.45f, panel.height - 116);
             var rightRect = new Rect(panel.x + 28 + leftRect.width, panel.y + 70, (panel.width - 52) * 0.45f, panel.height - 116);
@@ -944,7 +974,7 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
                 _showPauseLoadSlots = false;
                 if (_showPauseSaveSlots)
                 {
-                    _pendingSaveName = GetSaveDisplayName(_activeSlot);
+                    _pendingSaveName = GetSaveNameForSlot(_activeSlot);
                 }
             }
 
@@ -1071,6 +1101,15 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
             }
         }
 
+        private const float CraftPanelWidth = 560f;
+        private const float CraftPanelHeight = 560f;
+        private const float CraftQueueLabelY = 84f;
+        private const float CraftQueueStripY = 110f;
+        private const float CraftQueueStripH = 34f;
+        private const float CraftQueueHintY = 154f;
+        private const float CraftRowsStartY = 186f;
+        private const float CraftRowHeight = 32f;
+
         private void DrawCraftWindow(float sw, float sh)
         {
             var prev = GUI.color;
@@ -1078,33 +1117,61 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
             GUI.DrawTexture(new Rect(0, 0, sw, sh), Texture2D.whiteTexture);
             GUI.color = prev;
 
-            float w = 560f;
-            float h = 460f;
-            var panel = new Rect((sw - w) * 0.5f, (sh - h) * 0.5f, w, h);
+            var panel = new Rect((sw - CraftPanelWidth) * 0.5f, (sh - CraftPanelHeight) * 0.5f, CraftPanelWidth, CraftPanelHeight);
             GUI.Box(panel, GUIContent.none, UiTheme.Panel);
-            GUI.Label(new Rect(panel.x + 14, panel.y + 10, panel.width - 28, 26), "Крафт построек", UiTheme.Title);
+            GUI.Label(new Rect(panel.x + 14, panel.y + 10, panel.width - 28, 28), "Крафт построек", UiTheme.Title);
 
+            string pauseSuffix = _isCraftQueuePaused ? " [ПАУЗА]" : string.Empty;
             if (_activeCraftType.HasValue)
             {
                 float total = GetCraftDuration(_activeCraftType.Value);
                 float p = total > 0.001f ? Mathf.Clamp01(_activeCraftProgress / total) : 0f;
-                string pauseSuffix = _isCraftQueuePaused ? " [ПАУЗА]" : string.Empty;
-                GUI.Label(new Rect(panel.x + 14, panel.y + 34, panel.width - 28, 18), $"В работе: {_activeCraftType.Value} ({(int)(p * 100f)}%){pauseSuffix}  |  В очереди: {_craftQueue.Count}", UiTheme.Label);
-                GUI.Box(new Rect(panel.x + 14, panel.y + 54, panel.width - 28, 10), GUIContent.none, UiTheme.Panel);
+                GUI.Label(new Rect(panel.x + 14, panel.y + 38, panel.width - 28, 24),
+                    $"В работе: {_activeCraftType.Value} ({(int)(p * 100f)}%){pauseSuffix}  |  В очереди: {_craftQueue.Count}",
+                    UiTheme.Label);
+                GUI.Box(new Rect(panel.x + 14, panel.y + 64, panel.width - 28, 14), GUIContent.none, UiTheme.Panel);
                 GUI.color = new Color(0.25f, 0.75f, 1f, 0.9f);
-                GUI.DrawTexture(new Rect(panel.x + 16, panel.y + 56, (panel.width - 32) * p, 6), Texture2D.whiteTexture);
+                GUI.DrawTexture(new Rect(panel.x + 16, panel.y + 68, (panel.width - 32) * p, 6), Texture2D.whiteTexture);
                 GUI.color = prev;
             }
             else
             {
-                string pauseSuffix = _isCraftQueuePaused ? " [ПАУЗА]" : string.Empty;
-                GUI.Label(new Rect(panel.x + 14, panel.y + 36, panel.width - 28, 18), $"В очереди: {_craftQueue.Count}{pauseSuffix}", UiTheme.Label);
+                GUI.Label(new Rect(panel.x + 14, panel.y + 40, panel.width - 28, 24),
+                    $"В очереди: {_craftQueue.Count}{pauseSuffix}",
+                    UiTheme.Label);
+                GUI.Box(new Rect(panel.x + 14, panel.y + 64, panel.width - 28, 14), GUIContent.none, UiTheme.Panel);
             }
 
+            GUI.Label(new Rect(panel.x + 14, panel.y + CraftQueueLabelY, panel.width - 28, 24),
+                "Очередь — клик по иконке для выбора",
+                UiTheme.Label);
             DrawCraftQueueStrip(panel);
 
+            float hintY = panel.y + CraftQueueHintY;
+            string hintText = _selectedCraftQueueIndex >= 0 && _selectedCraftQueueIndex < _craftQueue.Count
+                ? $"Выбрано: {_craftQueue[_selectedCraftQueueIndex]} (#{_selectedCraftQueueIndex + 1})"
+                : "Выберите иконку в полосе для смены приоритета";
+            GUI.Label(new Rect(panel.x + 14, hintY, panel.width - 220, 26), hintText, UiTheme.WrapLabel);
+
+            bool canReorder = _selectedCraftQueueIndex >= 0 && _selectedCraftQueueIndex < _craftQueue.Count && _craftQueue.Count > 1;
+            const float reorderBtnH = 26f;
+            GUI.enabled = canReorder;
+            if (StyledButton(new Rect(panel.x + panel.width - 196, hintY, 34, reorderBtnH), "↑", "craft_move_up", UiTheme.Button))
+            {
+                MoveSelectedCraftQueueItem(-1);
+            }
+            if (StyledButton(new Rect(panel.x + panel.width - 158, hintY, 34, reorderBtnH), "↓", "craft_move_down", UiTheme.Button))
+            {
+                MoveSelectedCraftQueueItem(1);
+            }
+            if (StyledButton(new Rect(panel.x + panel.width - 120, hintY, 106, reorderBtnH), "В начало", "craft_move_first", UiTheme.Button))
+            {
+                MoveSelectedCraftQueueToFront();
+            }
+            GUI.enabled = true;
+
             DrawCraftRow(panel, 0, BuildingType.Pipe, "Труба");
-            DrawCraftRow(panel, 1, BuildingType.PipeCorner, "PipeCorner");
+            DrawCraftRow(panel, 1, BuildingType.PipeCorner, "Угол трубы");
             DrawCraftRow(panel, 2, BuildingType.PipeConnector, "Соединитель");
             DrawCraftRow(panel, 3, BuildingType.PipeSplitter, "Разделитель");
             DrawCraftRow(panel, 4, BuildingType.Extractor, "Экстрактор");
@@ -1115,48 +1182,27 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
             DrawCraftRow(panel, 9, BuildingType.MarketTerminal, "Рынок");
 
             bool hasQueuedOrActive = _craftQueue.Count > 0 || _activeCraftType.HasValue;
+            float footerY = panel.y + panel.height - 40f;
             GUI.enabled = _craftQueue.Count > 0;
-            if (StyledButton(new Rect(panel.x + 14, panel.y + panel.height - 38, 100, 28), "Cancel Last", "craft_cancel_last", UiTheme.Button))
+            if (StyledButton(new Rect(panel.x + 14, footerY, 100, 30), "Отмена 1", "craft_cancel_last", UiTheme.Button))
             {
                 CancelLastQueuedCraft();
             }
 
             GUI.enabled = hasQueuedOrActive;
-            if (StyledButton(new Rect(panel.x + 120, panel.y + panel.height - 38, 100, 28), "Cancel All", "craft_cancel_all", UiTheme.Button))
+            if (StyledButton(new Rect(panel.x + 120, footerY, 100, 30), "Отмена все", "craft_cancel_all", UiTheme.Button))
             {
                 CancelAllQueuedCraft();
             }
 
             GUI.enabled = hasQueuedOrActive;
-            if (StyledButton(new Rect(panel.x + 226, panel.y + panel.height - 38, 118, 28), _isCraftQueuePaused ? "Resume" : "Pause", "craft_pause_resume", UiTheme.Button))
+            if (StyledButton(new Rect(panel.x + 226, footerY, 118, 30), _isCraftQueuePaused ? "Продолж." : "Пауза", "craft_pause_resume", UiTheme.Button))
             {
                 ToggleCraftQueuePause();
             }
 
-            bool canReorder = _selectedCraftQueueIndex >= 0 && _selectedCraftQueueIndex < _craftQueue.Count && _craftQueue.Count > 1;
-            GUI.enabled = canReorder;
-            if (StyledButton(new Rect(panel.x + 366, panel.y + 66, 36, 24), "↑", "craft_move_up", UiTheme.Button))
-            {
-                MoveSelectedCraftQueueItem(-1);
-            }
-            if (StyledButton(new Rect(panel.x + 406, panel.y + 66, 36, 24), "↓", "craft_move_down", UiTheme.Button))
-            {
-                MoveSelectedCraftQueueItem(1);
-            }
-            if (StyledButton(new Rect(panel.x + 446, panel.y + 66, 96, 24), "В начало", "craft_move_first", UiTheme.Button))
-            {
-                MoveSelectedCraftQueueToFront();
-            }
             GUI.enabled = true;
-            GUI.Label(new Rect(panel.x + 14, panel.y + 66, 346, 22),
-                _selectedCraftQueueIndex >= 0 && _selectedCraftQueueIndex < _craftQueue.Count
-                    ? $"Выбрано в очереди: {_craftQueue[_selectedCraftQueueIndex]} (#{_selectedCraftQueueIndex + 1})"
-                    : "Выбери элемент в полосе очереди для изменения приоритета",
-                UiTheme.Label);
-
-            GUI.enabled = true;
-
-            if (StyledButton(new Rect(panel.x + panel.width - 132, panel.y + panel.height - 38, 120, 28), "Закрыть", "craft_close", UiTheme.Button))
+            if (StyledButton(new Rect(panel.x + panel.width - 132, footerY, 120, 30), "Закрыть", "craft_close", UiTheme.Button))
             {
                 _showCraftWindow = false;
             }
@@ -1164,19 +1210,20 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
 
         private void DrawCraftQueueStrip(Rect panel)
         {
-            var strip = new Rect(panel.x + 14, panel.y + 92, panel.width - 28, 26);
+            var strip = new Rect(panel.x + 14, panel.y + CraftQueueStripY, panel.width - 28, CraftQueueStripH);
             GUI.Box(strip, GUIContent.none, UiTheme.Panel);
             ClampSelectedCraftQueueIndex();
             int maxShown = Mathf.Min(10, _craftQueue.Count);
+            float iconY = strip.y + (strip.height - 18f) * 0.5f;
             for (int i = 0; i < maxShown; i++)
             {
                 float x = strip.x + 6 + i * 24;
-                var iconRect = new Rect(x, strip.y + 4, 18, 18);
+                var iconRect = new Rect(x, iconY, 18, 18);
                 if (_selectedCraftQueueIndex == i)
                 {
                     var prev = GUI.color;
                     GUI.color = new Color(0.25f, 0.75f, 1f, 0.9f);
-                    GUI.DrawTexture(new Rect(x - 2, strip.y + 2, 22, 22), Texture2D.whiteTexture);
+                    GUI.DrawTexture(new Rect(x - 2, iconY - 2, 22, 22), Texture2D.whiteTexture);
                     GUI.color = prev;
                 }
                 GUI.DrawTexture(iconRect, GetBuildIcon(_craftQueue[i]));
@@ -1191,20 +1238,20 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
 
             if (_craftQueue.Count > maxShown)
             {
-                GUI.Label(new Rect(strip.x + 6 + maxShown * 24, strip.y + 4, 60, 18), $"+{_craftQueue.Count - maxShown}", UiTheme.Label);
+                GUI.Label(new Rect(strip.x + 6 + maxShown * 24, iconY, 60, 20), $"+{_craftQueue.Count - maxShown}", UiTheme.Label);
             }
         }
 
         private void DrawCraftRow(Rect panel, int row, BuildingType type, string title)
         {
-            float y = panel.y + 96 + row * 30;
-            GUI.DrawTexture(new Rect(panel.x + 14, y + 6, 18, 18), GetBuildIcon(type));
-            GUI.Label(new Rect(panel.x + 38, y + 4, 120, 22), title, UiTheme.Label);
-            GUI.Label(new Rect(panel.x + 160, y + 4, 250, 22), GetBuildCostText(type), UiTheme.Label);
-            GUI.Label(new Rect(panel.x + 416, y + 4, 60, 22), $"x{GetCraftedCount(type)}", UiTheme.Label);
+            float y = panel.y + CraftRowsStartY + row * CraftRowHeight;
+            GUI.DrawTexture(new Rect(panel.x + 14, y + 7, 18, 18), GetBuildIcon(type));
+            GUI.Label(new Rect(panel.x + 38, y + 5, 118, 24), title, UiTheme.Label);
+            GUI.Label(new Rect(panel.x + 158, y + 5, 248, 24), GetBuildCostText(type), UiTheme.Label);
+            GUI.Label(new Rect(panel.x + 408, y + 5, 56, 24), $"x{GetCraftedCount(type)}", UiTheme.Label);
             bool canCraft = IsBuildingUnlocked(type) && CanAfford(type);
             GUI.enabled = canCraft;
-            if (StyledButton(new Rect(panel.x + 474, y + 2, 32, 26), "+1", $"craft_{type}_1", UiTheme.Button))
+            if (StyledButton(new Rect(panel.x + 474, y + 3, 32, 26), "+1", $"craft_{type}_1", UiTheme.Button))
             {
                 int queued = TryQueueCraft(type, 1);
                 if (queued > 0)

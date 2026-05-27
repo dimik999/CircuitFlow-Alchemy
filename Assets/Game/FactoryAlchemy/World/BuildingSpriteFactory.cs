@@ -37,6 +37,12 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
             ExportPngSetToProjectFolder();
         }
 
+        /// <summary>Extra transform scale applied on placed/preview objects (sprite PPU already normalized).</summary>
+        public static float GetWorldVisualScale(BuildingType type)
+        {
+            return 1f;
+        }
+
         public static Sprite GetWorldSprite(BuildingType type)
         {
             EnsureInitialized();
@@ -52,9 +58,10 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
                     ?? GetPipeWorldSprite(6);
             }
 
-            // Always retry loading from Resources first, so updated/reimported sprites
-            // (e.g. powerpole) replace previously cached fallback icons.
-            var loaded = LoadWorldSpriteFromResources(type, $"Sprites/Buildings/{GetBuildingSpriteName(type)}");
+            string resourcePath = $"Sprites/Buildings/{GetBuildingSpriteName(type)}";
+            Sprite loaded = type == BuildingType.PipeConnector || type == BuildingType.PipeSplitter
+                ? CreateCenteredJunctionWorldSprite(type, resourcePath)
+                : LoadWorldSpriteFromResources(type, resourcePath);
             if (loaded != null)
             {
                 WorldSprites[type] = loaded;
@@ -376,7 +383,91 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
                 }
             }
 
+            if (type == BuildingType.PipeConnector || type == BuildingType.PipeSplitter)
+            {
+                return CreateCenteredJunctionWorldSprite(type, pathWithoutExtension);
+            }
+
             return NormalizeWorldSprite(type, raw);
+        }
+
+        private static Sprite CreateCenteredJunctionWorldSprite(BuildingType type, string pathWithoutExtension)
+        {
+            Sprite raw = LoadRawJunctionSprite(pathWithoutExtension);
+            if (raw == null || raw.texture == null)
+            {
+                return null;
+            }
+
+            Rect rect = raw.rect;
+            if (rect.width <= 0f || rect.height <= 0f)
+            {
+                return null;
+            }
+
+            float basisPixels = Mathf.Max(rect.width, rect.height);
+            float targetUnits = WorldGridSystem.CellWorldSize;
+            float ppu = Mathf.Max(1f, basisPixels / targetUnits);
+
+            return Sprite.Create(
+                raw.texture,
+                rect,
+                new Vector2(0.5f, 0.5f),
+                ppu,
+                0,
+                SpriteMeshType.FullRect);
+        }
+
+        private static Sprite LoadRawJunctionSprite(string pathWithoutExtension)
+        {
+            string baseName = Path.GetFileName(pathWithoutExtension);
+            var sprites = Resources.LoadAll<Sprite>(pathWithoutExtension);
+            if (sprites != null && sprites.Length > 0)
+            {
+                for (int i = 0; i < sprites.Length; i++)
+                {
+                    if (sprites[i] != null && sprites[i].name.StartsWith(baseName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return sprites[i];
+                    }
+                }
+
+                return sprites[0];
+            }
+
+            try
+            {
+                string filePath = Path.Combine(Application.dataPath, "Resources", pathWithoutExtension + ".png");
+                if (!File.Exists(filePath))
+                {
+                    return null;
+                }
+
+                byte[] bytes = File.ReadAllBytes(filePath);
+                var tex = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+                tex.filterMode = FilterMode.Point;
+                tex.wrapMode = TextureWrapMode.Clamp;
+                if (!tex.LoadImage(bytes, false))
+                {
+                    return null;
+                }
+
+                var fromFile = Resources.Load<Sprite>(pathWithoutExtension);
+                if (fromFile != null && fromFile.rect.width > 0f && fromFile.rect.height > 0f)
+                {
+                    return Sprite.Create(
+                        tex,
+                        fromFile.rect,
+                        new Vector2(0.5f, 0.5f),
+                        fromFile.pixelsPerUnit);
+                }
+
+                return Sprite.Create(tex, new Rect(0f, 0f, tex.width, tex.height), new Vector2(0.5f, 0.5f), SpriteUtil.TilePixels);
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         private static Sprite LoadRawPowerPoleSpriteFallback()
@@ -424,6 +515,22 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
 
         private static Sprite LoadRawSpriteFromResources(string pathWithoutExtension)
         {
+            string baseName = Path.GetFileName(pathWithoutExtension);
+            var sprites = Resources.LoadAll<Sprite>(pathWithoutExtension);
+            if (sprites != null && sprites.Length > 0)
+            {
+                for (int i = 0; i < sprites.Length; i++)
+                {
+                    if (sprites[i] != null
+                        && sprites[i].name.StartsWith(baseName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return sprites[i];
+                    }
+                }
+
+                return sprites[0];
+            }
+
             var sprite = Resources.Load<Sprite>(pathWithoutExtension);
             if (sprite != null)
             {
@@ -449,15 +556,23 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
             }
 
             bool isTransportFamily = type == BuildingType.Pipe || type == BuildingType.PipeCorner || type == BuildingType.PipeConnector || type == BuildingType.PipeSplitter;
-            bool forceFullTextureForConnector = type == BuildingType.PipeConnector
-                                                || type == BuildingType.PipeSplitter
-                                                || type == BuildingType.PowerPole
-                                                || type == BuildingType.PipeCorner
-                                                || type == BuildingType.Storage;
+            bool forceFullTexture = type == BuildingType.PowerPole
+                                    || type == BuildingType.PipeCorner
+                                    || type == BuildingType.Storage;
             Rect sampledRect;
-            if (forceFullTextureForConnector && source.texture != null && source.texture.width > 0 && source.texture.height > 0)
+            if (forceFullTexture && source.texture != null && source.texture.width > 0 && source.texture.height > 0)
             {
                 sampledRect = new Rect(0f, 0f, source.texture.width, source.texture.height);
+            }
+            else if (type == BuildingType.PipeConnector || type == BuildingType.PipeSplitter)
+            {
+                // Full sprite slice — no tight crop, so cross arms are not clipped.
+                sampledRect = rect;
+            }
+            else if (type == BuildingType.Mixer)
+            {
+                // Full slice keeps baked pipe stubs; tight crop was clipping connection ports.
+                sampledRect = rect;
             }
             else
             {
@@ -504,16 +619,19 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
                     break;
                 case BuildingType.PipeConnector:
                 case BuildingType.PipeSplitter:
-                    // Keep one footprint for all transport assets to prevent visual drift.
-                    baseUnits = 1.3f;
+                    // Match straight pipe cell footprint so ports align with neighbors.
+                    baseUnits = 1.0f;
                     break;
                 // Core machines can be slightly larger for readability.
                 case BuildingType.Extractor:
                 case BuildingType.Generator:
-                case BuildingType.Mixer:
                 case BuildingType.Storage:
                 case BuildingType.MarketTerminal:
                     baseUnits = 1.2f;
+                    break;
+                // Mixer uses full sprite slice (with stubs); modest boost over 1.2 for the drum only.
+                case BuildingType.Mixer:
+                    baseUnits = 1.32f;
                     break;
                 case BuildingType.PowerPole:
                     baseUnits = 1.0f;

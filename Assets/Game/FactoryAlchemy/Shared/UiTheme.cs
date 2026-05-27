@@ -7,6 +7,7 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
         private static GUIStyle _panel;
         private static GUIStyle _title;
         private static GUIStyle _label;
+        private static GUIStyle _wrapLabel;
         private static GUIStyle _button;
         private static GUIStyle _tabButton;
         private static Texture2D _bg;
@@ -37,6 +38,15 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
             {
                 EnsureInitialized();
                 return _label;
+            }
+        }
+
+        public static GUIStyle WrapLabel
+        {
+            get
+            {
+                EnsureInitialized();
+                return _wrapLabel;
             }
         }
 
@@ -90,6 +100,12 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
                 normal = { textColor = new Color(0.87f, 0.92f, 1f) },
                 fontSize = 14,
                 alignment = TextAnchor.MiddleLeft
+            };
+
+            _wrapLabel = new GUIStyle(_label)
+            {
+                wordWrap = true,
+                alignment = TextAnchor.UpperLeft
             };
 
             _btnNormal = new Texture2D(1, 1);

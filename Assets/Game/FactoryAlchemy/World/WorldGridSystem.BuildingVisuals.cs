@@ -124,40 +124,29 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
                 return;
             }
 
-            Vector3 basePos = CellToWorld(cell, -0.2f);
-            if (data.Type != BuildingType.PipeConnector && data.Type != BuildingType.PipeSplitter)
-            {
-                data.View.transform.position = basePos;
-                return;
-            }
-
-            // Visual-only nudge toward transport output to close tiny seam with connected pipe.
-            const float nudgeCells = 0.04f;
-            Vector2Int dir = data.Direction == Vector2Int.zero ? Vector2Int.right : data.Direction;
-            Vector3 nudge = new Vector3(dir.x * nudgeCells * CellWorldSize, dir.y * nudgeCells * CellWorldSize, 0f);
-            data.View.transform.position = basePos + nudge;
+            data.View.transform.position = CellToWorld(cell, -0.2f);
         }
 
-        private static void TryAddDirectionArrow(BuildingData data)
+        /// <summary>Removes legacy dark rectangle markers from older saves / builds.</summary>
+        public void RemoveLegacyDirectionArrowMarkers()
         {
-            if (data == null || data.View == null)
+            foreach (var pair in _buildings)
             {
-                return;
+                if (pair.Value?.View == null)
+                {
+                    continue;
+                }
+
+                Transform root = pair.Value.View.transform;
+                for (int i = root.childCount - 1; i >= 0; i--)
+                {
+                    Transform child = root.GetChild(i);
+                    if (child.name == "Arrow")
+                    {
+                        Destroy(child.gameObject);
+                    }
+                }
             }
-
-            if (data.Type == BuildingType.Pipe)
-            {
-                return;
-            }
-
-            var arrow = new GameObject("Arrow");
-            arrow.transform.SetParent(data.View.transform, false);
-            arrow.transform.localPosition = new Vector3(0.24f * CellWorldSize, 0f, -0.05f);
-            arrow.transform.localScale = new Vector3(0.38f * CellWorldSize, 0.16f * CellWorldSize, 1f);
-
-            var sr = arrow.AddComponent<SpriteRenderer>();
-            sr.sprite = SpriteUtil.MakeSolidSprite(new Color(0.1f, 0.1f, 0.1f, 0.9f));
-            sr.sortingOrder = 5;
         }
 
         private static bool IsTransportCarrier(BuildingType type)
