@@ -129,48 +129,7 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
                 return;
             }
 
-            Vector3 basePos = CellToWorld(cell, -0.2f);
-
-            if (data.Type == BuildingType.Pipe)
-            {
-                const float nudgeCells = 0.075f;
-                Vector2Int towardMixer = Vector2Int.zero;
-                if (CanPipeConnect(cell, Vector2Int.up) && IsMixerAt(cell + Vector2Int.up))
-                {
-                    towardMixer += Vector2Int.up;
-                }
-
-                if (CanPipeConnect(cell, Vector2Int.right) && IsMixerAt(cell + Vector2Int.right))
-                {
-                    towardMixer += Vector2Int.right;
-                }
-
-                if (CanPipeConnect(cell, Vector2Int.down) && IsMixerAt(cell + Vector2Int.down))
-                {
-                    towardMixer += Vector2Int.down;
-                }
-
-                if (CanPipeConnect(cell, Vector2Int.left) && IsMixerAt(cell + Vector2Int.left))
-                {
-                    towardMixer += Vector2Int.left;
-                }
-
-                if (towardMixer != Vector2Int.zero)
-                {
-                    float nx = towardMixer.x != 0 ? Mathf.Sign(towardMixer.x) : 0f;
-                    float ny = towardMixer.y != 0 ? Mathf.Sign(towardMixer.y) : 0f;
-                    Vector3 nudge = new Vector3(nx * nudgeCells * CellWorldSize, ny * nudgeCells * CellWorldSize, 0f);
-                    data.View.transform.position = basePos + nudge;
-                    return;
-                }
-            }
-
-            data.View.transform.position = basePos;
-        }
-
-        private bool IsMixerAt(Vector2Int cell)
-        {
-            return _buildings.TryGetValue(cell, out var b) && b.Type == BuildingType.Mixer;
+            data.View.transform.position = CellToWorld(cell, -0.2f);
         }
 
         private int BuildPipeConnectionMask(Vector2Int cell, BuildingData data)
@@ -246,8 +205,8 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
 
             if (b.Type == BuildingType.Mixer)
             {
-                // Mixer: no connection on output(front) side.
-                return dir != -b.Direction;
+                // All sides are routable; input from the output face is rejected in CanAccept.
+                return true;
             }
 
             if (b.Type == BuildingType.MarketTerminal)

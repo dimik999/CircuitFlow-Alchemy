@@ -106,6 +106,18 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
     /// <summary>Справочник рецептов и механик для UI (H).</summary>
     public static class GameReferenceCatalog
     {
+        public const string GoldResourceKey = "Gold";
+
+        public static string GetInventoryResourceTitle(string key)
+        {
+            if (key == GoldResourceKey)
+            {
+                return "Золото";
+            }
+
+            return key;
+        }
+
         public static string GetTabTitle(ReferenceTab tab)
         {
             switch (tab)
@@ -183,7 +195,7 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
             new BuildingReference(BuildingType.PipeConnector, "Соединитель", "Узел с несколькими портами.", "С начала", BuildCostTable(BuildingType.PipeConnector)),
             new BuildingReference(BuildingType.PipeSplitter, "Разделитель", "1 вход, до 3 выходов.", "С начала", BuildCostTable(BuildingType.PipeSplitter)),
             new BuildingReference(BuildingType.Extractor, "Экстрактор", "Добыча с ресурсного узла клетки.", "С начала", BuildCostTable(BuildingType.Extractor)),
-            new BuildingReference(BuildingType.Storage, "Хранилище", "Буфер с ручным забором (ПКМ).", "С начала", BuildCostTable(BuildingType.Storage)),
+            new BuildingReference(BuildingType.Storage, "Хранилище", "Буфер с ручным забором (ЛКМ).", "С начала", BuildCostTable(BuildingType.Storage)),
             new BuildingReference(BuildingType.Mixer, "Смеситель", "Aqua + Ignis → Aeris.", "Заказ гильдии №1", BuildCostTable(BuildingType.Mixer)),
             new BuildingReference(BuildingType.Generator, "Генератор", "Источник энергии для сети.", "Заказ гильдии №2 (энергия)", BuildCostTable(BuildingType.Generator)),
             new BuildingReference(BuildingType.PowerPole, "Столб", "Передаёт энергию в радиусе.", "Заказ гильдии №2", BuildCostTable(BuildingType.PowerPole)),
@@ -205,7 +217,7 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
                 {
                     "Экстрактор ставится только на цветной узел карты.",
                     "Выход — в сторону, куда смотрит стрелка (клавиша R).",
-                    "Хранилище: вход с тыла, выход вперёд; ПКМ — окно ручного забора.",
+                    "Хранилище: вход с тыла, выход вперёд; ЛКМ — окно ручного забора.",
                 }),
             new ReferenceNote("Смеситель",
                 new[]

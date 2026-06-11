@@ -58,7 +58,6 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
         private GuildOrder[] _guildOrders;
         private int _currentGuildOrderIndex;
         private bool _actOneFinaleComplete;
-        private int _coins;
         private int _upgExtractor;
         private int _upgMixer;
         private int _upgPower;

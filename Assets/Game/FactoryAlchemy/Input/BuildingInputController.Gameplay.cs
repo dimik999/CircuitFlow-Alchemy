@@ -399,6 +399,21 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
             return _world.GetInventoryAmount(key);
         }
 
+        private int GetGoldAmount()
+        {
+            return Mathf.FloorToInt(_world.GetInventoryAmount(GameReferenceCatalog.GoldResourceKey));
+        }
+
+        private void AddGold(int amount)
+        {
+            if (amount <= 0 || _world == null)
+            {
+                return;
+            }
+
+            _world.AddInventory(GameReferenceCatalog.GoldResourceKey, amount);
+        }
+
         private static string DirToText(Vector2Int dir)
         {
             if (dir == Vector2Int.up) return "Вверх";
@@ -427,7 +442,7 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
             {
                 if (goal.CoinReward > 0)
                 {
-                    _coins += goal.CoinReward;
+                    AddGold(goal.CoinReward);
                 }
 
                 _currentGoalIndex++;
@@ -456,7 +471,7 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
 
             _actOneFinaleComplete = true;
             const int finaleBonus = 250;
-            _coins += finaleBonus;
+            AddGold(finaleBonus);
             _hint =
                 $"Акт 1 завершён! Проект-ключ «Кольцо первой цепи» собран. Награда: +{finaleBonus} золота и карт-бланш Гильдии на Восточный карьер (новая зона — в Акте 2). Заказы гильдии можно продолжать.";
         }
@@ -491,7 +506,7 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
             PlayerPrefs.SetInt(KeyForSlot(SaveKeyGoal, slot), _currentGoalIndex);
             PlayerPrefs.SetInt(KeyForSlot(SaveKeyGuildOrder, slot), _currentGuildOrderIndex);
             PlayerPrefs.SetInt(KeyForSlot(SaveKeyActOneFinale, slot), _actOneFinaleComplete ? 1 : 0);
-            PlayerPrefs.SetInt(KeyForSlot(SaveKeyCoins, slot), _coins);
+            PlayerPrefs.SetInt(KeyForSlot(SaveKeyCoins, slot), GetGoldAmount());
             PlayerPrefs.SetInt(KeyForSlot(SaveKeyUpgExtractor, slot), _upgExtractor);
             PlayerPrefs.SetInt(KeyForSlot(SaveKeyUpgMixer, slot), _upgMixer);
             PlayerPrefs.SetInt(KeyForSlot(SaveKeyUpgPower, slot), _upgPower);
@@ -528,7 +543,11 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
 
             _currentGoalIndex = Mathf.Clamp(PlayerPrefs.GetInt(KeyForSlot(SaveKeyGoal, slot), 0), 0, _goals.Length);
             _currentGuildOrderIndex = Mathf.Clamp(PlayerPrefs.GetInt(KeyForSlot(SaveKeyGuildOrder, slot), 0), 0, _guildOrders.Length);
-            _coins = Mathf.Max(0, PlayerPrefs.GetInt(KeyForSlot(SaveKeyCoins, slot), 0));
+            int legacyCoins = Mathf.Max(0, PlayerPrefs.GetInt(KeyForSlot(SaveKeyCoins, slot), 0));
+            if (_world.GetInventoryAmount(GameReferenceCatalog.GoldResourceKey) < 0.001f && legacyCoins > 0)
+            {
+                _world.AddInventory(GameReferenceCatalog.GoldResourceKey, legacyCoins);
+            }
             _actOneFinaleComplete = PlayerPrefs.GetInt(KeyForSlot(SaveKeyActOneFinale, slot), 0) == 1;
             bool grantedAct1Migr = false;
             if (_goals != null && _currentGoalIndex >= _goals.Length && !_actOneFinaleComplete)
@@ -798,7 +817,6 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
             _currentGoalIndex = 0;
             _currentGuildOrderIndex = 0;
             _actOneFinaleComplete = false;
-            _coins = 0;
             _upgExtractor = 0;
             _upgMixer = 0;
             _upgPower = 0;
@@ -1015,7 +1033,7 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
                 return;
             }
 
-            _coins += order.RewardCoins;
+            AddGold(order.RewardCoins);
             _currentGuildOrderIndex++;
             _hint = _currentGuildOrderIndex < _guildOrders.Length
                 ? $"Гильдия: выполнено '{order.Title}', +{order.RewardCoins} монет"

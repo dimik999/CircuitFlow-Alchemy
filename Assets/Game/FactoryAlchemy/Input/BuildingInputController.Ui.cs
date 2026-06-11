@@ -728,9 +728,11 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
                 {
                     IsBuilding = false,
                     BuildingType = BuildingType.None,
-                    DisplayName = kv.Key,
+                    DisplayName = GameReferenceCatalog.GetInventoryResourceTitle(kv.Key),
                     Count = kv.Value,
-                    CountText = $"{kv.Value:0.##}",
+                    CountText = kv.Key == GameReferenceCatalog.GoldResourceKey
+                        ? $"{Mathf.FloorToInt(kv.Value)}"
+                        : $"{kv.Value:0.##}",
                     Icon = GetResourceIcon(kv.Key),
                     Group = 0
                 });
@@ -1371,6 +1373,7 @@ namespace CircuitFlowAlchemy.Game.FactoryAlchemy
                 "Ignis" => new Color(1f, 0.45f, 0.2f, 1f),
                 "Terra" => new Color(0.42f, 0.8f, 0.28f, 1f),
                 "Aeris" => new Color(0.75f, 0.95f, 1f, 1f),
+                GameReferenceCatalog.GoldResourceKey => new Color(0.95f, 0.78f, 0.15f, 1f),
                 _ => new Color(0.8f, 0.8f, 0.8f, 1f)
             };
 
